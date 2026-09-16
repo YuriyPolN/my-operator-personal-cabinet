@@ -1,0 +1,44 @@
+// Оптимизированная логическая модель БД биллинговой системы (MVP, Выпуск 1.0) - Финал
+
+Table Subscriber {
+  id int [pk, increment, note: 'Уникальный идентификатор абонента (PK)']
+  phone_number varchar(12) [not null, unique, note: 'Номер телефона абонента в формате +7XXXXXXXXXX']
+  balance decimal(10,2) [not null, default: 0.00, note: 'Текущий баланс лицевого счета в рублях']
+}
+
+Table Tariff {
+  id int [pk, increment, note: 'Уникальный идентификатор тарифного плана (PK)']
+  name varchar(100) [not null, note: 'Наименование тарифного плана']
+  price decimal(10,2) [not null, note: 'Фиксированная стоимость перехода на тарифный план']
+  packet_minutes int [not null, note: 'Объем включенного пакета минут']
+  packet_sms int [not null, note: 'Объем включенного пакета СМС']
+  packet_gigabytes int [not null, note: 'Объем включенного пакета мобильного интернета в ГБ']
+}
+
+Table TariffHistory {
+  id int [pk, increment, note: 'Уникальный идентификатор записи истории (PK)']
+  subscriber_id int [not null, note: 'Ссылка на абонента (FK)']
+  tariff_id int [not null, note: 'Ссылка на тарифный план (FK)']
+  activated_at datetime [not null, note: 'Дата и время активации тарифного плана']
+  deactivated_at datetime [note: 'Дата отключения (NULL, если тарифный план активен в настоящий момент)']
+}
+
+Table Option {
+  id int [pk, increment, note: 'Уникальный идентификатор дополнительной опции (PK)']
+  name varchar(100) [not null, note: 'Наименование дополнительной опции']
+  price decimal(10,2) [not null, note: 'Стоимость подключения опции']
+}
+
+Table Subscriber_Option {
+  id int [pk, increment, note: 'Уникальный идентификатор связи (PK) - позволяет хранить повторные подключения']
+  subscriber_id int [not null, note: 'Ссылка на абонента (FK)']
+  option_id int [not null, note: 'Ссылка на дополнительную опцию (FK)']
+  connected_at datetime [not null, note: 'Дата и время подключения дополнительной опции']
+  disconnected_at datetime [note: 'Дата отключения (NULL, если опция активна в настоящий момент)']
+}
+
+// Описание логических связей (внешние ключи без избыточных пересечений)
+Ref: TariffHistory.subscriber_id > Subscriber.id
+Ref: TariffHistory.tariff_id > Tariff.id
+Ref: Subscriber_Option.subscriber_id > Subscriber.id
+Ref: Subscriber_Option.option_id > Option.id

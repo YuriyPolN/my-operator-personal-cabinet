@@ -1,0 +1,29 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Абонент" as User
+actor "Биллинговая система" as Billing <<External System>>
+actor "SMS-шлюз" as SMS <<External System>>
+
+rectangle "Мобильное приложение (Личный кабинет)" {
+  usecase "UC-001: Авторизация абонента в Приложении" as UC1
+  usecase "UC-002: Просмотр баланса и остатков пакетов услуг" as UC2
+  usecase "UC-003: Смена тарифного плана абонента" as UC3
+  usecase "UC-004: Просмотр списка всех доступных тарифов" as UC4
+  usecase "UC-005: Подключение и отключение дополнительных опций" as UC5
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+User --> UC5
+
+UC1 --> SMS : Отправка OTP
+UC1 --> Billing : Верификация номера
+UC2 --> Billing : Запрос данных
+UC3 --> Billing : Проверка и списание
+UC4 --> Billing : Запрос каталога
+UC5 --> Billing : Изменение статуса
+@enduml

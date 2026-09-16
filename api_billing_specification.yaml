@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: Мой оператор связи - API Личного кабинета
+  description: Полная спецификация требований к программному интерфейсу (MVP, Выпуск 1.0)
+  version: 1.0.0
+servers:
+  - url: https://my-operator.ru
+    description: Продуктивный server API
+tags:
+  - name: AUTH
+    description: Аутентификация и авторизация абонентов
+  - name: SUBSCRIBER
+    description: Управление профилем, тарифами и услугами абонента
+paths:
+  /auth/send-code:
+    post:
+      tags:
+        - AUTH
+      summary: Запрос одноразового SMS-кода (OTP)
+      description: Генерирует 4-значный код и отправляет его на указанный номер телефона абонента через СМС-шлюз.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone_number
+              properties:
+                phone_number:
+                  type: string
+                  example: "+79991234567"
+      responses:
+        '200':
+          description: Код успешно сгенерирован и отправлен
+        '400':
+          description: Неверный формат номера телефона или номер не принадлежит оператору
+
+  /auth/verify-code:
+    post:
+      tags:
+        - AUTH
+      summary: Проверка одноразового SMS-кода и создание сессии
+      description: Валидирует введенный пользователем код. При успешной проверке создает сессию и возвращает токен доступа (Bearer token).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone_number
+                - code
+              properties:
+                phone_number:
+                  type: string
+                  example: "+79991234567"
+                code:
+                  type: string
+                  example: "1234"
+      responses:
+        '200':
+          description: Код успешно проверен, сессия создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+                  subscriber_id:
+                    type: integer
+                    example: 1
+        '400':
+          description: Неверный код или израсходован срок его жизни (5 минут)
+        '404':
+          description: Абонент с таким номером не найден
+
+  /subscriber/profile:
+    get:
+      tags:
+        - SUBSCRIBER
+      summary: Получение данных профиля, баланса и пакетов услуг
+      description: Возвращает текущий баланс абонента и остатки по пакетам (минуты, СМС, ГБ) напрямую из биллинга для Главного экрана.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные профиля успешно получены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  phone_number:
+                    type: string
+                    example: "+79991234567"
+                  balance:
+                    type: number
+                    format: float
+                    example: 350.50
+                  current_tariff:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 5
+                      name:
+                        type: string
+                        example: "Тариф Ноль"
+                  packets_left:
+                    type: object
+                    properties:
+                      minutes:
+                        type: integer
+                        example: 240
+                      sms:
+                        type: integer
+                        example: 45
+                      gigabytes:
+                        type: integer
+                        example: 12
+        '401':
+          description: Абонент не авторизован
+  /subscriber/tariffs:
+    get:
+      tags:
+        - SUBSCRIBER
+      summary: Получение каталога доступных тарифов
+      description: Запрашивает из биллинговой системы полный список действующих тарифных планов сотового оператора для отображения в каталоге.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Каталог тарифов успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 5
+                    name:
+                      type: string
+                      example: "Тариф Ноль"
+                    price:
+                      type: number
+                      format: float
+                      example: 400.00
+                    packet_minutes:
+                      type: integer
+                      example: 300
+                    packet_sms:
+                      type: integer
+                      example: 100
+                    packet_gigabytes:
+                      type: integer
+                      example: 20
+        '401':
+          description: Абонент не авторизован
+
+  /subscriber/change-tariff:
+    post:
+      tags:
+        - SUBSCRIBER
+      summary: Смена тарифного плана абонента
+      description: Инициирует в биллинге процедуру смены тарифа с валидацией баланса и временного лимита (не чаще раза в 24 часа).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_tariff_id
+              properties:
+                target_tariff_id:
+                  type: integer
+                  example: 5
+      responses:
+        '200':
+          description: Тарифный план успешно изменен в биллинге
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Тарифный план успешно изменен"
+        '400':
+          description: Ошибка бизнес-валидации (недостаточно средств или прошло менее 24 часов со смены)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Смена тарифного плана доступна не чаще одного раза в 24 часа. Пожалуйста, повторите попытку позже"
+        '401':
+          description: Абонент не авторизован
+
+  /subscriber/options:
+    get:
+      tags:
+        - SUBSCRIBER
+      summary: Получение списка дополнительных опций
+      description: Возвращает список всех доступных в биллинге опций с указанием их текущего статуса подключения для данного абонента.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список опций успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 10
+                    name:
+                      type: string
+                      example: "Пакет +10 ГБ"
+                    price:
+                      type: number
+                      format: float
+                      example: 150.00
+                    is_connected:
+                      type: boolean
+                      example: true
+        '401':
+          description: Абонент не авторизован
+
+  /subscriber/options/toggle:
+    post:
+      tags:
+        - SUBSCRIBER
+      summary: Подключение или отключение дополнительной опции
+      description: Изменяет статус дополнительной опции для абонента. При подключении проверяется баланс и списывается стоимость. При отключении фиксируется дата отключения опции.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - option_id
+                - action
+              properties:
+                option_id:
+                  type: integer
+                  example: 10
+                action:
+                  type: string
+                  enum: [connect, disconnect]
+                  example: "connect"
+      responses:
+        '200':
+          description: Статус опции успешно изменен в биллинге
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Опция успешно изменена"
+        '400':
+          description: Ошибка бизнес-валидации (недостаточно средств на балансе для подключения платной опции)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Недостаточно средств для подключения услуги"
+        '401':
+          description: Абонент не авторизован
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
